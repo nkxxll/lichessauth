@@ -1,0 +1,4 @@
+(executable
+ (public_name lichessserver)
+ (name main)
+ (libraries lichessserver dream mirage-crypto-rng base64 cohttp cohttp-lwt-unix))
