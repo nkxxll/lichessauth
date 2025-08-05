@@ -1,5 +1,11 @@
 open Lwt.Infix
 
+type tokenResponse = {
+  token_type : string;
+  access_token : string;
+  expires_in : int;
+}
+
 let redirect_url = "http://localhost:8080/redirect"
 let email_url = "https://lichess.org/api/account/email"
 let request_url = "https://lichess.org/oauth"
@@ -7,7 +13,9 @@ let token_url = "https://lichess.org/api/token"
 let client_id = "veryveryuniqueclientid"
 let verifier = ref ""
 let state = ref ""
-let auth = ref ""
+
+let auth : tokenResponse ref =
+  ref { access_token = ""; token_type = ""; expires_in = 0 }
 
 let rec fetch_follow_redirects ?(max_redirects = 5) uri ~headers ~body =
   if max_redirects = 0 then Lwt.fail_with "Too many redirects"
@@ -87,7 +95,6 @@ let () =
                            "application/x-www-form-urlencoded"
                        in
                        let open Lwt.Infix in
-                       Dream.log "Body %s" (Uri.encoded_of_query form_data);
                        fetch_follow_redirects ~headers
                          ~body:
                            (Cohttp_lwt.Body.of_string
@@ -95,17 +102,29 @@ let () =
                          (Uri.of_string token_url)
                        >>= fun (_, body) ->
                        Cohttp_lwt.Body.to_string body >>= fun body_str ->
-                       Dream.log "%s" body_str;
-                       auth := body_str;
+                       (* TODO this is a json yo decode that json *)
+                       let json = Yojson.Basic.from_string body_str in
+                       let open Yojson.Basic.Util in
+                       let token_type =
+                         json |> member "token_type" |> to_string
+                       in
+                       let access_token =
+                         json |> member "access_token" |> to_string
+                       in
+                       let expires_in = json |> member "expires_in" |> to_int in
+
+                       auth := { token_type; access_token; expires_in };
+                       Dream.log "token_type %s; expires_in %d" !auth.token_type
+                         !auth.expires_in;
                        Dream.redirect req "/email")
                  else Dream.empty `Bad_Request);
          Dream.get "/email" (fun _req ->
              let headers =
-               Dream.log "Bearer %s\n" !auth;
-               Cohttp.Header.init_with "Authorization" ("Bearer " ^ !auth)
+               Cohttp.Header.init_with "Authorization"
+                 ("Bearer " ^ !auth.access_token)
              in
              let open Lwt.Infix in
-             Cohttp_lwt_unix.Client.post ~headers (Uri.of_string email_url)
+             Cohttp_lwt_unix.Client.get ~headers (Uri.of_string email_url)
              >>= fun (_res, body) ->
              Cohttp_lwt.Body.to_string body >>= fun body_str ->
              Dream.respond ~status:`OK body_str);
