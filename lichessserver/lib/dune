@@ -1,2 +1,7 @@
 (library
- (name lichessserver))
+ (name lichessserver)
+ (public_name lichessserver)
+ (libraries angstrom base)
+ (inline_tests)
+ (preprocess
+  (pps ppx_expect)))
