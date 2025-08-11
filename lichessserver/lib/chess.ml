@@ -609,18 +609,66 @@ d5 {+0.52} 11. h4 {+0.59}) 8... d6 9. Re1 Nbd7 10. a4 Qe7 *|}
     [%expect.unreachable]
 ;;
 
-type tree =
-  | Leaf
-  | Node of { notation: string; mutable next: tree list }
+type node =
+  { notation : string
+  ; mutable next : node list
+  }
 [@@deriving sexp]
 
+(* Parse tokens into a node tree with alternatives *)
 let parse_tokens tokens =
-  let tokens = tokens |> List.filter ~f:(fun t -> match t with
-  | Result _ | Number _ -> true
-  | _ -> false) in
-  let rec parse rest current =
+  let tokens =
+    List.filter tokens ~f:(function
+      | Result _ | Number _ -> false
+      | _ -> true)
+  in
+  (* parse a sequence of moves until the end or a RBracket *)
+  let rec parse_sequence toks =
+    match toks with
+    | [] -> [], None
+    | RBracket :: rest -> rest, None (* stop on right bracket *)
+    | Notation m :: rest ->
+      let current_node = { notation = m; next = [] } in
+      let rest, next_node_opt = parse_sequence rest in
+      (match next_node_opt with
+       | None -> rest, Some current_node
+       | Some next_node ->
+         current_node.next <- [ next_node ];
+         rest, Some current_node)
+    | LBracket :: rest ->
+      let rest, alts = parse_alternatives rest in
+      let rest, next_node_opt = parse_sequence rest in
+      let alt_node =
+        match next_node_opt with
+        | None -> { notation = ""; next = alts }
+        | Some next_node -> { notation = ""; next = alts @ [ next_node ] }
+      in
+      rest, Some alt_node
+    | _ :: rest -> parse_sequence rest (* skip unexpected tokens *)
+  (* parse alternatives inside brackets *)
+  and parse_alternatives toks =
+    let rec loop acc toks =
+      match toks with
+      | [] -> [], List.rev acc (* no closing bracket, return what we have *)
+      | RBracket :: rest -> rest, List.rev acc (* end of alternatives *)
+      | _ ->
+        let rest, seq_opt = parse_sequence toks in
+        (match seq_opt with
+         | None -> rest, List.rev acc
+         | Some seq -> loop (seq :: acc) rest)
+    in
+    loop [] toks
+  in
+  let _, root_opt = parse_sequence tokens in
+  match root_opt with
+  | None -> { notation = ""; next = [] } (* empty tree *)
+  | Some root -> root
+;;
 
-
+let rec print_tree node =
+  sexp_of_node node |> Sexp.to_string |> Stdio.print_endline;
+  List.iter node.next ~f:print_tree
+;;
 
 let%expect_test "tree from tokens" =
   let game_str =
@@ -633,18 +681,12 @@ let%expect_test "tree from tokens" =
 [Result "*"]
 [Link "https://www.chess.com/analysis/game/pgn/26CErLFvbg/analysis"]
 
-1. d4 e6 2. Bf4 b6 3. e3 g6 (3... Bb7 4. Nf3 Nf6 5. Bd3 Nh5 6. Bg5 Be7 7. Bxe7
-Qxe7 {+0.22} 8. O-O O-O 9. c4 Nf6 10. Nc3 d5 11. cxd5 exd5 12. Rc1 c5 13. dxc5
-{+0.26} 13... bxc5 14. Qa4 Nbd7 15. Rfd1 Nb6 16. Qh4 g6 17. Na4 {+0.37}) 4. Nf3
-Bg7 (4... Bb7 5. Bd3 Nf6 6. Qe2 c5 7. Nc3 Nc6 8. O-O {+0.39} 8... Be7 9. Nb5 d6
-10. c4 O-O 11. Rad1 {+0.44}) 5. Bd3 f5 6. c3 Nf6 7. Nbd2 Bb7 8. O-O (8. Qe2
-{+0.40} 8... d6 {+0.44} 9. O-O-O {+0.42} 9... Nc6 {+0.54} 10. Rhe1 {+0.40} 10...
-d5 {+0.52} 11. h4 {+0.59}) 8... d6 9. Re1 Nbd7 10. a4 Qe7 *|}
+1. e4 e5 (1... e6) 2. f4 (2. Nc3 Nc6) e5 *|}
   in
   match parse_string ~consume:All game game_str with
   | Ok (_config, tokens) ->
     let parsed = parse_tokens tokens in
-    print_tree parsed;
+    sexp_of_node parsed |> Sexp.to_string_hum |> Stdio.print_endline;
     [%expect {||}]
   | Error err ->
     Stdio.print_endline err;
