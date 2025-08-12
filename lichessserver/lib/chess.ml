@@ -611,9 +611,9 @@ d5 {+0.52} 11. h4 {+0.59}) 8... d6 9. Re1 Nbd7 10. a4 Qe7 *|}
 
 type node =
   { notation : string
+  ; parent : node option
   ; mutable next : node list
   }
-[@@deriving sexp]
 
 (* Parse tokens into a node tree with alternatives *)
 let parse_tokens tokens =
@@ -622,51 +622,35 @@ let parse_tokens tokens =
       | Result _ | Number _ -> false
       | _ -> true)
   in
+  let root = { notation = "root"; next = []; parent = None } in
   (* parse a sequence of moves until the end or a RBracket *)
-  let rec parse_sequence toks =
+  (* we need a last in here to add the variation if we find them *)
+  (* last -> current -> LBracket -> var to current which is added to last.next *)
+  let rec parse_sequence last toks =
     match toks with
-    | [] -> [], None
-    | RBracket :: rest -> rest, None (* stop on right bracket *)
-    | Notation m :: rest ->
-      let current_node = { notation = m; next = [] } in
-      let rest, next_node_opt = parse_sequence rest in
-      (match next_node_opt with
-       | None -> rest, Some current_node
-       | Some next_node ->
-         current_node.next <- [ next_node ];
-         rest, Some current_node)
-    | LBracket :: rest ->
-      let rest, alts = parse_alternatives rest in
-      let rest, next_node_opt = parse_sequence rest in
-      let alt_node =
-        match next_node_opt with
-        | None -> { notation = ""; next = alts }
-        | Some next_node -> { notation = ""; next = alts @ [ next_node ] }
+    | [] -> []
+    | RBracket :: tl -> tl
+    | Notation no :: tl ->
+      let new_node = { notation = no; next = []; parent = Some last } in
+      last.next <- new_node :: last.next;
+      parse_sequence new_node tl
+    | LBracket :: tl ->
+      let rest =
+        match last.parent with
+        | Some p -> parse_sequence p tl
+        | None -> failwith "should have a parent"
       in
-      rest, Some alt_node
-    | _ :: rest -> parse_sequence rest (* skip unexpected tokens *)
-  (* parse alternatives inside brackets *)
-  and parse_alternatives toks =
-    let rec loop acc toks =
-      match toks with
-      | [] -> [], List.rev acc (* no closing bracket, return what we have *)
-      | RBracket :: rest -> rest, List.rev acc (* end of alternatives *)
-      | _ ->
-        let rest, seq_opt = parse_sequence toks in
-        (match seq_opt with
-         | None -> rest, List.rev acc
-         | Some seq -> loop (seq :: acc) rest)
-    in
-    loop [] toks
+      parse_sequence last rest
+    | _ -> failwith "there are no other tokens"
   in
-  let _, root_opt = parse_sequence tokens in
-  match root_opt with
-  | None -> { notation = ""; next = [] } (* empty tree *)
-  | Some root -> root
+  let _rest = parse_sequence root tokens in
+  root
 ;;
 
 let rec print_tree node =
-  sexp_of_node node |> Sexp.to_string |> Stdio.print_endline;
+  Stdio.print_endline ("Node: " ^ node.notation);
+  Stdio.printf "Next:";
+  List.iter node.next ~f:(fun n -> Stdio.printf " %s" n.notation); Stdio.print_endline "";
   List.iter node.next ~f:print_tree
 ;;
 
@@ -681,14 +665,203 @@ let%expect_test "tree from tokens" =
 [Result "*"]
 [Link "https://www.chess.com/analysis/game/pgn/26CErLFvbg/analysis"]
 
-1. e4 e5 (1... e6) 2. f4 (2. Nc3 Nc6) e5 *|}
+1. e4 e5 (1... e6) 2. f4 (2. Nc3 Nc6) d5 *|}
   in
   match parse_string ~consume:All game game_str with
   | Ok (_config, tokens) ->
     let parsed = parse_tokens tokens in
-    sexp_of_node parsed |> Sexp.to_string_hum |> Stdio.print_endline;
-    [%expect {||}]
+    print_tree parsed;
+    [%expect {|
+      Node: root
+      Next: e4
+      Node: e4
+      Next: e6 e5
+      Node: e6
+      Next:
+      Node: e5
+      Next: Nc3 f4
+      Node: Nc3
+      Next: Nc6
+      Node: Nc6
+      Next:
+      Node: f4
+      Next: d5
+      Node: d5
+      Next:
+      |}]
   | Error err ->
     Stdio.print_endline err;
     [%expect.unreachable]
 ;;
+
+let%expect_test "tree from tokens" =
+  let game_str =
+    {|[Event "?"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "?"]
+[White "?"]
+[Black "?"]
+[Result "*"]
+[Link "https://www.chess.com/analysis/game/pgn/26CErLFvbg/analysis"]
+
+1. d4 e6 2. Bf4 b6 3. e3 g6 (3... Bb7 4. Nf3 Nf6 5. Bd3 Nh5 6. Bg5 Be7 7. Bxe7
+Qxe7 {+0.22} 8. O-O O-O 9. c4 Nf6 10. Nc3 d5 11. cxd5 exd5 12. Rc1 c5 13. dxc5
+{+0.26} 13... bxc5 14. Qa4 Nbd7 15. Rfd1 Nb6 16. Qh4 g6 17. Na4 {+0.37}) 4. Nf3
+Bg7 (4... Bb7 5. Bd3 Nf6 6. Qe2 c5 7. Nc3 Nc6 8. O-O {+0.39} 8... Be7 9. Nb5 d6
+10. c4 O-O 11. Rad1 {+0.44}) 5. Bd3 f5 6. c3 Nf6 7. Nbd2 Bb7 8. O-O (8. Qe2
+{+0.40} 8... d6 {+0.44} 9. O-O-O {+0.42} 9... Nc6 {+0.54} 10. Rhe1 {+0.40} 10...
+d5 {+0.52} 11. h4 {+0.59}) 8... d6 9. Re1 Nbd7 10. a4 Qe7 *|}
+  in
+  match parse_string ~consume:All game game_str with
+  | Ok (_config, tokens) ->
+    let parsed = parse_tokens tokens in
+    print_tree parsed;
+    [%expect {|
+      Node: root
+      Next: d4
+      Node: d4
+      Next: e6
+      Node: e6
+      Next: Bf4
+      Node: Bf4
+      Next: b6
+      Node: b6
+      Next: e3
+      Node: e3
+      Next: Bb7 g6
+      Node: Bb7
+      Next: Nf3
+      Node: Nf3
+      Next: Nf6
+      Node: Nf6
+      Next: Bd3
+      Node: Bd3
+      Next: Nh5
+      Node: Nh5
+      Next: Bg5
+      Node: Bg5
+      Next: Be7
+      Node: Be7
+      Next: Bxe7
+      Node: Bxe7
+      Next: Qxe7
+      Node: Qxe7
+      Next: O-O
+      Node: O-O
+      Next: O-O
+      Node: O-O
+      Next: c4
+      Node: c4
+      Next: Nf6
+      Node: Nf6
+      Next: Nc3
+      Node: Nc3
+      Next: d5
+      Node: d5
+      Next: cxd5
+      Node: cxd5
+      Next: exd5
+      Node: exd5
+      Next: Rc1
+      Node: Rc1
+      Next: c5
+      Node: c5
+      Next: dxc5
+      Node: dxc5
+      Next: bxc5
+      Node: bxc5
+      Next: Qa4
+      Node: Qa4
+      Next: Nbd7
+      Node: Nbd7
+      Next: Rfd1
+      Node: Rfd1
+      Next: Nb6
+      Node: Nb6
+      Next: Qh4
+      Node: Qh4
+      Next: g6
+      Node: g6
+      Next: Na4
+      Node: Na4
+      Next:
+      Node: g6
+      Next: Nf3
+      Node: Nf3
+      Next: Bb7 Bg7
+      Node: Bb7
+      Next: Bd3
+      Node: Bd3
+      Next: Nf6
+      Node: Nf6
+      Next: Qe2
+      Node: Qe2
+      Next: c5
+      Node: c5
+      Next: Nc3
+      Node: Nc3
+      Next: Nc6
+      Node: Nc6
+      Next: O-O
+      Node: O-O
+      Next: Be7
+      Node: Be7
+      Next: Nb5
+      Node: Nb5
+      Next: d6
+      Node: d6
+      Next: c4
+      Node: c4
+      Next: O-O
+      Node: O-O
+      Next: Rad1
+      Node: Rad1
+      Next:
+      Node: Bg7
+      Next: Bd3
+      Node: Bd3
+      Next: f5
+      Node: f5
+      Next: c3
+      Node: c3
+      Next: Nf6
+      Node: Nf6
+      Next: Nbd2
+      Node: Nbd2
+      Next: Bb7
+      Node: Bb7
+      Next: Qe2 O-O
+      Node: Qe2
+      Next: d6
+      Node: d6
+      Next: O-O-O
+      Node: O-O-O
+      Next: Nc6
+      Node: Nc6
+      Next: Rhe1
+      Node: Rhe1
+      Next: d5
+      Node: d5
+      Next: h4
+      Node: h4
+      Next:
+      Node: O-O
+      Next: d6
+      Node: d6
+      Next: Re1
+      Node: Re1
+      Next: Nbd7
+      Node: Nbd7
+      Next: a4
+      Node: a4
+      Next: Qe7
+      Node: Qe7
+      Next:
+      |}]
+  | Error err ->
+    Stdio.print_endline err;
+    [%expect.unreachable]
+;;
+
+
