@@ -10,8 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@bity/oauth2-auth-code-pkce": "^2.13.0",
+    "@tanstack/react-query": "^5.85.0",
     "react": "^19.1.0",
+    "react-chessboard": "^5.2.2",
     "react-dom": "^19.1.0",
     "react-hot-toast": "^2.5.2"
   },

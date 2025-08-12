@@ -79,6 +79,7 @@ let move_section =
   many (many not_relevant *> choice [ result; number; notation; l_bracket; r_bracket ])
 ;;
 
+let simple_move_list = sep_by (char ' ') notation
 let game = config >>= fun c -> many not_relevant *> move_section >>| fun moves -> c, moves
 
 let%expect_test "config one move" =

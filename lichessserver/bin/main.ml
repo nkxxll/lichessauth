@@ -20,18 +20,18 @@ type opening =
   ; name : string
   ; ply : int
   }
-[@@deriving show]
+[@@deriving show, yojson]
 
 type player =
   { name : string
   ; id : string
   }
-[@@deriving show]
+[@@deriving show, yojson]
 
 type side =
   | White
   | Black
-[@@deriving show]
+[@@deriving show, yojson]
 
 type game =
   { id : string
@@ -40,7 +40,7 @@ type game =
   ; players : player * player
   ; winner : side
   }
-[@@deriving show]
+[@@deriving show, yojson]
 
 let redirect_url = "http://localhost:8080/redirect"
 let email_url = "https://lichess.org/api/account/email"
@@ -62,6 +62,10 @@ let parse_user json =
   { username; _id = id; _created_at = created_at }
 ;;
 
+let games_to_json (games : game list) : Yojson.Safe.t =
+  `List (List.map ~f:game_to_yojson games)
+;;
+
 let make_basic_get
       auth
       ?(headers = Cohttp.Header.init_with "Authorization" ("Bearer " ^ auth.access_token))
@@ -72,7 +76,7 @@ let make_basic_get
   >>= fun (_res, body) -> Cohttp_lwt.Body.to_string body
 ;;
 
-let parseGame (json : Yojson.Basic.t) : game =
+let parse_game (json : Yojson.Basic.t) : game =
   let open Yojson.Basic.Util in
   let id = json |> member "id" |> to_string in
   let moves = json |> member "moves" |> to_string in
@@ -84,8 +88,8 @@ let parseGame (json : Yojson.Basic.t) : game =
     }
   in
   let player1, player2 =
-    let player_black_json = json |> member "players" |> member "black" in
-    let player_white_json = json |> member "players" |> member "white" in
+    let player_black_json = json |> member "players" |> member "black" |> member "user" in
+    let player_white_json = json |> member "players" |> member "white" |> member "user" in
     let player1 =
       { name = player_white_json |> member "name" |> to_string
       ; id = player_white_json |> member "id" |> to_string
@@ -113,7 +117,7 @@ let parse_game_list json_str =
   |> String.split_lines
   (* filter last empty line *)
   |> List.filter ~f:(fun item -> not (String.equal item ""))
-  |> List.map ~f:(fun item -> Yojson.Basic.from_string item |> parseGame)
+  |> List.map ~f:(fun item -> Yojson.Basic.from_string item |> parse_game)
 ;;
 
 let rec fetch_follow_redirects ?(max_redirects = 5) uri ~headers ~body =
@@ -215,14 +219,14 @@ let () =
                  let newUser = parse_user (Yojson.Basic.from_string body_str) in
                  thisUser := newUser;
                  Dream.log "This User:\n%s" (show_user !thisUser);
-                 Dream.redirect req "/email")
+                 Dream.redirect req "http://localhost:5173/")
              else Dream.empty `Bad_Request)
        ; Dream.get "/email" (fun _req ->
            make_basic_get !auth (Uri.of_string email_url)
            >>= fun body_str -> Dream.respond ~status:`OK body_str)
-       ; Dream.get "/games" (fun _req ->
+       ; Dream.get "/gamelist" (fun _req ->
            let query =
-             [ "max", [ "2" ]
+             [ "max", [ "20" ]
              ; "opening", [ "true" ]
              ; "perfType", [ "blitz"; "rapid"; "classical" ]
              ]
@@ -236,6 +240,26 @@ let () =
            let headers = Cohttp.Header.add headers "Accept" "application/x-ndjson" in
            make_basic_get !auth uri ~headers
            >>= fun body ->
+           (* dont wasted another thought on that but should probably *)
+           let games = parse_game_list body in
+           Dream.json (Yojson.Safe.to_string (games_to_json games)))
+       ; Dream.get "/debug_games" (fun _req ->
+           let query =
+             [ "max", [ "20" ]
+             ; "opening", [ "true" ]
+             ; "perfType", [ "blitz"; "rapid"; "classical" ]
+             ]
+           in
+           let uri =
+             Uri.with_query (Uri.of_string (games_url !thisUser.username)) query
+           in
+           let headers =
+             Cohttp.Header.init_with "Authorization" ("Bearer " ^ !auth.access_token)
+           in
+           let headers = Cohttp.Header.add headers "Accept" "application/x-ndjson" in
+           make_basic_get !auth uri ~headers
+           >>= fun body ->
+           Dream.log "%s" body;
            let games = parse_game_list body in
            Dream.html (List.map ~f:show_game games |> String.concat ~sep:"\n"))
        ]
