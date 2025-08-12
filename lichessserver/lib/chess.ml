@@ -609,11 +609,57 @@ d5 {+0.52} 11. h4 {+0.59}) 8... d6 9. Re1 Nbd7 10. a4 Qe7 *|}
     [%expect.unreachable]
 ;;
 
-type node =
-  { notation : string
-  ; parent : node option
-  ; mutable next : node list
-  }
+module ChessNode = struct
+  open Sexplib0
+
+  type t =
+    { notation : string
+    ; mutable next : t list
+    ; mutable parent : t option
+    }
+
+  (* Custom S-expression converter *)
+  let rec sexp_of_t (n : t) : Sexp.t =
+    Sexp.List [ Sexp.Atom n.notation; Sexp.List (List.map ~f:sexp_of_t n.next) ]
+  ;;
+
+  let rec t_of_sexp (sexp : Sexp.t) : t =
+    match sexp with
+    | Sexp.List [ Sexp.Atom notation; Sexp.List children ] ->
+      { notation; next = List.map ~f:t_of_sexp children; parent = None }
+    | _ -> failwith "Invalid node sexp"
+  ;;
+
+  (* Utility to reconnect parent links after parsing *)
+  let rec set_parents parent node =
+    node.parent <- parent;
+    List.iter ~f:(set_parents (Some node)) node.next
+  ;;
+end
+
+(* this is not a effect free function we are changing the next list of the base_node tree *)
+let merge_nodes base_node new_node =
+  let open ChessNode in
+  (* Merge children from new_node into base_node *)
+  let rec loop base_node new_node =
+    List.iter
+      ~f:(fun new_child ->
+        match
+          List.find
+            ~f:(fun existing -> String.equal existing.notation new_child.notation)
+            base_node.next
+        with
+        | Some existing_child ->
+          (* Merge recursively if move already exists *)
+          loop existing_child new_child
+        | None ->
+          (* Add as new variation *)
+          base_node.next <- base_node.next @ [ new_child ])
+      new_node.next
+  in
+  loop base_node new_node;
+  base_node
+;;
 
 (* Parse tokens into a node tree with alternatives *)
 let parse_tokens tokens =
@@ -622,7 +668,7 @@ let parse_tokens tokens =
       | Result _ | Number _ -> false
       | _ -> true)
   in
-  let root = { notation = "root"; next = []; parent = None } in
+  let root = { ChessNode.notation = "root"; next = []; parent = None } in
   (* parse a sequence of moves until the end or a RBracket *)
   (* we need a last in here to add the variation if we find them *)
   (* last -> current -> LBracket -> var to current which is added to last.next *)
@@ -631,7 +677,7 @@ let parse_tokens tokens =
     | [] -> []
     | RBracket :: tl -> tl
     | Notation no :: tl ->
-      let new_node = { notation = no; next = []; parent = Some last } in
+      let new_node = { ChessNode.notation = no; next = []; parent = Some last } in
       last.next <- new_node :: last.next;
       parse_sequence new_node tl
     | LBracket :: tl ->
@@ -648,9 +694,11 @@ let parse_tokens tokens =
 ;;
 
 let rec print_tree node =
+  let open ChessNode in
   Stdio.print_endline ("Node: " ^ node.notation);
   Stdio.printf "Next:";
-  List.iter node.next ~f:(fun n -> Stdio.printf " %s" n.notation); Stdio.print_endline "";
+  List.iter node.next ~f:(fun n -> Stdio.printf " %s" n.notation);
+  Stdio.print_endline "";
   List.iter node.next ~f:print_tree
 ;;
 
@@ -671,7 +719,8 @@ let%expect_test "tree from tokens" =
   | Ok (_config, tokens) ->
     let parsed = parse_tokens tokens in
     print_tree parsed;
-    [%expect {|
+    [%expect
+      {|
       Node: root
       Next: e4
       Node: e4
@@ -717,7 +766,8 @@ d5 {+0.52} 11. h4 {+0.59}) 8... d6 9. Re1 Nbd7 10. a4 Qe7 *|}
   | Ok (_config, tokens) ->
     let parsed = parse_tokens tokens in
     print_tree parsed;
-    [%expect {|
+    [%expect
+      {|
       Node: root
       Next: d4
       Node: d4
@@ -864,4 +914,60 @@ d5 {+0.52} 11. h4 {+0.59}) 8... d6 9. Re1 Nbd7 10. a4 Qe7 *|}
     [%expect.unreachable]
 ;;
 
+let%expect_test "merge two simple move trees" =
+  let game1 =
+    {|[Event "Example 1"]
+[Site "?"]
+[Date "2025.08.12"]
+[Round "-"]
+[White "White"]
+[Black "Black"]
+[Result "*"]
 
+1. e4 e5 2. Nc3 Nf6 3. f4 d5 4. fxe5 Nxe4 *|}
+  in
+  let game2 =
+    {|[Event "Example 2"]
+[Site "?"]
+[Date "2025.08.12"]
+[Round "-"]
+[White "White"]
+[Black "Black"]
+[Result "*"]
+
+1. e4 e5 2. Nc3 Nf6 3. f4 d5 4. exd5 Nxd5 *|}
+  in
+  let quick_parse game_str =
+    match parse_string ~consume:All game game_str with
+    | Ok (_config, toks) -> toks
+    | Error _ -> failwith "cannot happen in this test"
+  in
+  let base = quick_parse game1 in
+  let new_game = quick_parse game2 in
+  let base = merge_nodes (parse_tokens base) (parse_tokens new_game) in
+  print_tree base;
+  [%expect {|
+    Node: root
+    Next: e4
+    Node: e4
+    Next: e5
+    Node: e5
+    Next: Nc3
+    Node: Nc3
+    Next: Nf6
+    Node: Nf6
+    Next: f4
+    Node: f4
+    Next: d5
+    Node: d5
+    Next: fxe5 exd5
+    Node: fxe5
+    Next: Nxe4
+    Node: Nxe4
+    Next:
+    Node: exd5
+    Next: Nxd5
+    Node: Nxd5
+    Next:
+    |}]
+;;
