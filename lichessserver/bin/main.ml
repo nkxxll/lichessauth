@@ -33,6 +33,26 @@ type side =
   | Black
 [@@deriving show, yojson]
 
+type arrow_color =
+  | Red
+  | Green
+[@@deriving yojson]
+
+type arrow =
+  { start_square : string
+  ; end_square : string
+  ; color : arrow_color
+  }
+[@@deriving yojson]
+
+type chessboard_options =
+  { fen : string
+  ; bad_move : arrow
+  ; good_move : arrow
+  ; orientation : side
+  }
+[@@deriving yojson]
+
 type game =
   { id : string
   ; moves : string
@@ -262,5 +282,20 @@ let () =
            Dream.log "%s" body;
            let games = parse_game_list body in
            Dream.html (List.map ~f:show_game games |> String.concat ~sep:"\n"))
+       ; Dream.get "/opening" (fun req ->
+           match Dream.query req "color", Dream.query req "moves" with
+           | Some _color, Some _moves ->
+             let example_chessboard : chessboard_options =
+               { fen = "r1bqkbnr/pppppppp/n7/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+               ; bad_move = { start_square = "e2"; end_square = "e4"; color = Red }
+               ; good_move = { start_square = "d2"; end_square = "d4"; color = Green }
+               ; orientation = White
+               }
+             in
+             let json =
+               example_chessboard |> chessboard_options_to_yojson |> Yojson.Safe.to_string
+             in
+             Dream.json json
+           | _ -> Dream.empty `Bad_Request)
        ]
 ;;
