@@ -1,6 +1,9 @@
 open Angstrom
 open Base
 
+(* lol this is not in 17 this is only in base 18 *)
+let ( >> ) f g x = g (f x)
+
 type config =
   { key : string
   ; value : string
@@ -21,6 +24,175 @@ type token =
   | RBracket
   | Result of game_result
 [@@deriving sexp]
+
+let parse_file =
+  satisfy (function
+    | 'a' .. 'e' -> true
+    | _ -> false)
+;;
+
+let parse_rank =
+  satisfy (function
+    | '1' .. '8' -> true
+    | _ -> false)
+  >>| fun r -> Char.to_int r - Char.to_int '0'
+;;
+
+type piece_type =
+  | Pawn
+  | Knight
+  | Bishop
+  | Rook
+  | Queen
+  | King
+[@@deriving show, compare, equal]
+
+type move_info =
+  { piece : piece_type
+  ; from_file : char option
+  ; from_rank : int option
+  ; to_file : char
+  ; to_rank : int
+  ; promotion : piece_type option
+  ; is_capture : bool
+  ; is_check : bool
+  ; is_checkmate : bool
+  ; is_castle_kingside : bool
+  ; is_castle_queenside : bool
+  }
+[@@deriving show]
+
+let parse_piece_type =
+  satisfy (function
+    | 'K' | 'Q' | 'R' | 'B' | 'N' -> true
+    | _ -> false)
+  >>| function
+  | 'K' -> King
+  | 'Q' -> Queen
+  | 'R' -> Rook
+  | 'B' -> Bishop
+  | 'N' -> Knight
+  | _ -> failwith "unreachable"
+;;
+
+let parse_promotion = char '=' *> parse_piece_type >>| fun p -> Some p
+
+let parse_check_or_mate =
+  option
+    (false, false)
+    (satisfy (function
+       | '+' | '#' -> true
+       | _ -> false)
+     >>| function
+     | '+' -> true, false
+     | '#' -> false, true
+     | _ -> failwith "unreachable")
+;;
+
+(* yes to_file and to_rank have weird values but we filter this out before making a move *)
+let parse_castle =
+  string "O-O-O"
+  >>| (fun _ ->
+  { piece = King
+  ; from_file = None
+  ; from_rank = None
+  ; to_file = ' '
+  ; to_rank = -1
+  ; promotion = None
+  ; is_capture = false
+  ; is_check = false
+  ; is_checkmate = false
+  ; is_castle_kingside = false
+  ; is_castle_queenside = true
+  })
+  <|> (string "O-O"
+       >>| fun _ ->
+       { piece = King
+       ; from_file = None
+       ; from_rank = None
+       ; to_file = ' '
+       ; to_rank = -1
+       ; promotion = None
+       ; is_capture = false
+       ; is_check = false
+       ; is_checkmate = false
+       ; is_castle_kingside = true
+       ; is_castle_queenside = false
+       })
+;;
+
+let parse_pawn_move =
+  parse_file
+  >>= fun from_file ->
+  option false (char 'x' *> return true)
+  >>= fun is_capture ->
+  parse_file
+  >>= fun to_file ->
+  parse_rank
+  >>= fun to_rank ->
+  option None parse_promotion
+  >>= fun promotion ->
+  parse_check_or_mate
+  >>= fun (is_check, is_checkmate) ->
+  return
+    { piece = Pawn
+    ; from_file = Some from_file
+    ; from_rank = None
+    ; to_file = to_file
+    ; to_rank = to_rank
+    ; promotion
+    ; is_capture
+    ; is_check
+    ; is_checkmate
+    ; is_castle_kingside = false
+    ; is_castle_queenside = false
+    }
+;;
+
+let parse_piece_move =
+  parse_piece_type
+  >>= fun piece ->
+  option None (parse_file >>| Option.some)
+  >>= fun from_file ->
+  option None (parse_rank >>| Option.some)
+  >>= fun from_rank ->
+  option false (char 'x' *> return true)
+  >>= fun is_capture ->
+  parse_file
+  >>= fun to_file ->
+  parse_rank
+  >>= fun to_rank ->
+  option None parse_promotion
+  >>= fun promotion ->
+  parse_check_or_mate
+  >>= fun (is_check, is_checkmate) ->
+  return
+    { piece
+    ; from_file
+    ; from_rank
+    ; to_file = to_file
+    ; to_rank = to_rank
+    ; promotion
+    ; is_capture
+    ; is_check
+    ; is_checkmate
+    ; is_castle_kingside = false
+    ; is_castle_queenside = false
+    }
+;;
+
+let parse_san =
+  parse_castle
+  <|> (peek_char
+       >>= function
+       | Some ('K' | 'Q' | 'R' | 'B' | 'N') -> parse_piece_move
+       | _ -> parse_pawn_move)
+;;
+
+let parse_san_exn san =
+    match parse_string ~consume:All parse_san san with
+      | Ok mi -> mi
+      | Error _ -> failwith "san could not be parsed!"
 
 let ws =
   skip_many1
@@ -947,7 +1119,8 @@ let%expect_test "merge two simple move trees" =
   let new_game = quick_parse game2 in
   let base = merge_nodes (parse_tokens base) (parse_tokens new_game) in
   print_tree base;
-  [%expect {|
+  [%expect
+    {|
     Node: root
     Next: e4
     Node: e4
@@ -971,4 +1144,41 @@ let%expect_test "merge two simple move trees" =
     Node: Nxd5
     Next:
     |}]
+;;
+
+let%expect_test "san notation parsing" =
+  let sans =
+    [ "e4"
+    ; "exd5"
+    ; "exd6"
+    ; "e8=Q"
+    ; "exd8=R"
+    ; "e8=Q+"
+    ; "e8=Q#"
+    ; "exd8=Q#"
+    ; "Nf3"
+    ; "Qh5"
+    ; "Bxc4"
+    ; "Nf7+"
+    ; "Qh7#"
+    ; "Rxe8#"
+    ; "Nbd7"
+    ; "R1e4"
+    ; "Qh4e1"
+    ; "O-O"
+    ; "O-O-O"
+    ; "O-O+"
+    ; "O-O-O#"
+    ; "Raxd8+"
+    ; "Nfxe8=Q"
+    ; "fxg8=R#"
+    ]
+  in
+  let parse_helper san =
+    match parse_string ~consume:All parse_san san with
+    | Ok s -> s
+    | Error _ -> failwith "cannot happen"
+  in
+  List.iter sans ~f:(parse_helper >> show_move_info >> Stdio.print_endline);
+  [%expect {||}]
 ;;

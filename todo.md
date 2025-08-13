@@ -10,3 +10,8 @@
     the 8th move or so I will have to save the chess courses in a file in some text format I want
     to use S-Expressions
   - I will also have to merge the move tree from the different course parts of white and black
+
+### Oh Oh TODOs limitations
+
+- En passant capture moves
+- san for moves that a disambiguous because of game semantics (e.g. pin)

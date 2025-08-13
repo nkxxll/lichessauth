@@ -1,20 +1,11 @@
 open Base
 
-type figure_type =
-  | Pawn
-  | Knight
-  | Rook
-  | Queen
-  | King
-  | Bishop
-[@@deriving show]
-
 type figure_color =
   | White
   | Black
 [@@deriving show, equal]
 
-type figure = figure_color * figure_type [@@deriving show]
+type figure = figure_color * Chess.piece_type [@@deriving show]
 
 type square =
   | Empty
@@ -99,12 +90,12 @@ let make_move board move =
 ;;
 
 let piece_to_char = function
-  | Pawn -> 'p'
-  | Knight -> 'n'
-  | Rook -> 'r'
-  | Bishop -> 'b'
-  | Queen -> 'q'
-  | King -> 'k'
+  | Chess.Pawn -> 'p'
+  | Chess.Knight -> 'n'
+  | Chess.Rook -> 'r'
+  | Chess.Bishop -> 'b'
+  | Chess.Queen -> 'q'
+  | Chess.King -> 'k'
 ;;
 
 let square_to_char = function
@@ -133,6 +124,104 @@ let fen_of_board (board : square list list) : string =
     loop [] 0 rank
   in
   board |> List.map ~f:rank_to_fen |> List.rev |> String.concat ~sep:"/"
+;;
+
+let is_empty board { row; col } =
+  match List.nth_exn (List.nth_exn board row) col with
+  | Empty -> true
+  | _ -> false
+;;
+
+let has_no_blockers board from_pos to_pos =
+  let dr = compare to_pos.row from_pos.row in
+  let dc = compare to_pos.col from_pos.col in
+  let rec loop r c =
+    let r' = r + dr in
+    let c' = c + dc in
+    if r' = to_pos.row && c' = to_pos.col
+    then true
+    else if not (is_empty board { row = r'; col = c' })
+    then false
+    else loop r' c'
+  in
+  loop from_pos.row from_pos.col
+;;
+
+let is_legal_move board from_pos to_pos =
+  let dr = to_pos.row - from_pos.row in
+  let dc = to_pos.col - from_pos.col in
+  match List.nth_exn (List.nth_exn board from_pos.row) from_pos.col with
+  | Empty -> false
+  | Figure (color, piece) ->
+    (match piece with
+     | Pawn ->
+       let dir = if equal_figure_color color White then -1 else 1 in
+       let start_row = if equal_figure_color color White then 6 else 1 in
+       (* Move forward *)
+       if dc = 0
+       then
+         if dr = dir && is_empty board to_pos
+         then true
+         else if
+           from_pos.row = start_row
+           && dr = 2 * dir
+           && is_empty board to_pos
+           && is_empty board { row = from_pos.row + dir; col = from_pos.col }
+         then true
+         else false (* Capture diagonally *)
+       else if abs dc = 1 && dr = dir
+       then (
+         match List.nth_exn (List.nth_exn board to_pos.row) to_pos.col with
+         | Figure (c, _) when not (equal_figure_color c color) -> true
+         | _ -> false)
+       else false
+     | Knight -> (abs dr = 2 && abs dc = 1) || (abs dr = 1 && abs dc = 2)
+     | Bishop -> abs dr = abs dc && has_no_blockers board from_pos to_pos
+     | Rook -> (dr = 0 || dc = 0) && has_no_blockers board from_pos to_pos
+     | Queen ->
+       (abs dr = abs dc || dr = 0 || dc = 0) && has_no_blockers board from_pos to_pos
+     | King -> abs dr <= 1 && abs dc <= 1)
+;;
+
+(* I hate chess all not zero indexed but my list of my board is *)
+let file_to_int file = Char.to_int file - Char.to_int 'a' + 1
+
+let move_from_pgn board color notation =
+  let move_info = Chess.parse_san_exn notation in
+  let dest_pos = { row = move_info.to_rank; col = file_to_int move_info.to_file } in
+  (* Helper: does a piece match the SAN constraints *)
+  let piece_matches pos square =
+    match square with
+    | Figure (c, t) ->
+      equal_figure_color c color
+      && Chess.equal_piece_type move_info.piece t
+      && (match move_info.from_file with
+          | Some f -> file_to_int f = pos.row
+          | None -> true)
+      &&
+        (match move_info.from_rank with
+        | Some r -> r = pos.row
+        | None -> true)
+    | Empty -> false
+  in
+  (* Find source position by scanning board *)
+  let rec find_source r c =
+    if r >= List.length board
+    then failwith "No matching source square found"
+    else if c >= List.length (List.nth_exn board r)
+    then find_source (r + 1) 0
+    else (
+      let pos = { row = r; col = c } in
+      let sq = List.nth_exn (List.nth_exn board r) c in
+      if piece_matches pos sq
+      then
+        (* Extra check: can this piece legally move to dest_pos? *)
+        (* This assumes you have some function is_legal_move *)
+        if is_legal_move board pos dest_pos then pos else find_source r (c + 1)
+      else find_source r (c + 1))
+  in
+  let source_pos = find_source 0 0 in
+  make_move board { from_square = source_pos; to_square = dest_pos }
 ;;
 
 let%expect_test "test board creation" =
