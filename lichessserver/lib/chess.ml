@@ -1,9 +1,6 @@
 open Angstrom
 open Base
 
-(* lol this is not in 17 this is only in base 18 *)
-let ( >> ) f g x = g (f x)
-
 type config =
   { key : string
   ; value : string
@@ -254,7 +251,7 @@ let move_section =
 
 let simple_move_list = sep_by (char ' ') notation
 let game = config >>= fun c -> many not_relevant *> move_section >>| fun moves -> c, moves
-let file = sep_by (string "\n\n") game
+let file = sep_by (string "\n\n") game <* not_relevant
 
 let%expect_test "config one move" =
   let text =
@@ -1351,11 +1348,11 @@ let setup_merge_deviation file_str moves color =
   | Error err -> Error ("file could not be parsed: " ^ err)
 ;;
 
-let find_opening_error file_str moves color =
+let find_opening_error ~black_file_str ~white_file_str moves color =
   let move_list = String.split moves ~on:' ' in
   match color with
-  | "white" -> setup_merge_deviation file_str move_list color
-  | "black" -> setup_merge_deviation file_str move_list color
+  | "white" -> setup_merge_deviation white_file_str move_list color
+  | "black" -> setup_merge_deviation black_file_str move_list color
   | _ -> Error "bad color"
 ;;
 
