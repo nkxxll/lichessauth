@@ -11,3 +11,8 @@
   cohttp-lwt-unix)
  (preprocess
   (pps ppx_deriving.show ppx_deriving_yojson)))
+
+(executable
+ (public_name parsetest)
+ (name parsetest)
+ (libraries lichessserver base))

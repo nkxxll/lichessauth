@@ -169,8 +169,8 @@ let random_string ~len =
   encoded
 ;;
 
-let e4nystyle = Stdio.In_channel.read_all "./pgn/e4NYStyle.pgn"
-let e6b6nystyle = Stdio.In_channel.read_all "./pgn/e6b6NYStyle.pgn"
+let e4nystyle () = Stdio.In_channel.read_all "./pgn/e4NYStyle_nl.pgn" |> String.strip
+let e6b6nystyle () = Stdio.In_channel.read_all "./pgn/e6b6NYStyle_nl.pgn" |> String.strip
 
 let () =
   Dream.run ~port:8080
@@ -288,7 +288,13 @@ let () =
        ; Dream.get "/opening" (fun req ->
            match Dream.query req "color", Dream.query req "moves" with
            | Some color, Some moves ->
-             (match Lichessserver.find_opening_error ~white_file_str:e4nystyle ~black_file_str:e6b6nystyle moves color with
+             (match
+                Lichessserver.find_opening_error
+                  ~white_file_str:(e4nystyle ())
+                  ~black_file_str:(e6b6nystyle ())
+                  moves
+                  color
+              with
               | Ok deviation -> Dream.json deviation
               | Error err -> Dream.html err ~status:`Internal_Server_Error)
            | _ -> Dream.empty `Bad_Request)

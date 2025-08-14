@@ -251,7 +251,7 @@ let move_section =
 
 let simple_move_list = sep_by (char ' ') notation
 let game = config >>= fun c -> many not_relevant *> move_section >>| fun moves -> c, moves
-let file = sep_by (string "\n\n") game <* not_relevant
+let file = sep_by (string "\n\n") game
 
 let%expect_test "config one move" =
   let text =

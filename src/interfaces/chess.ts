@@ -1,7 +1,12 @@
+export interface Opening {
+  eco: string;
+  name: string;
+  ply: number;
+}
 export interface Game {
   id: string;
   moves: string;
-  opening: string;
+  opening: Opening;
   players: Array<{ user: string; id: string }>;
 }
 

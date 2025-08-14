@@ -2,8 +2,8 @@ import { useMutation } from "@tanstack/react-query";
 import type { OpeningProps } from "../components/Opening";
 import type { Game } from "../interfaces/chess";
 
-export async function fetchGameList(): Promise<Game[]> {
-  const res = await fetch("/api/gamelist");
+export async function fetchGameList(count: number): Promise<Game[]> {
+  const res = await fetch(`/api/gamelist?count=${count}`);
 
   if (!res.ok) {
     throw new Error(`Failed to fetch games: ${res.status}`);

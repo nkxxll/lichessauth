@@ -1,1 +1,33 @@
 @import "tailwindcss";
+@tailwind "utilities";
+
+@layer utilities {
+  .left-scrollbar {
+    direction: rtl;
+  }
+
+  .left-scrollbar > * {
+    direction: ltr;
+  }
+
+  .scrollbar::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+    display: none;
+  }
+
+  .scrollbar::-webkit-scrollbar-track {
+    border-radius: 8px; /* Softer rounded corners */
+    background: #0f172a;
+  }
+
+  .scrollbar::-webkit-scrollbar-thumb {
+    background: #334155; /* A subtle, dark slate blue */
+    border-radius: 8px; /* Softer rounded corners */
+    border: none; /* Removed the border to make it look cleaner */
+  }
+
+  .scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #475569; /* A slightly lighter shade on hover */
+  }
+}
