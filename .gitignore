@@ -57,5 +57,7 @@ setup.log
 
 # Local OPAM switch
 lichessserver/_opam/
+lichessserver/pgn/*
+!lichessserver/pgn/.gitkeep
 
 # End of https://www.toptal.com/developers/gitignore/api/ocaml

@@ -2,11 +2,16 @@ import toast, { Toaster } from "react-hot-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchGameList, useOpeningErrorMutation } from "./api/api";
 import { Opening, type OpeningProps } from "./components/Opening";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const PLAYER = "brandtheon";
 
 function App() {
+  // has to be at the top
+  useEffect(() => {
+    SearchQuery();
+  }, []);
+
   const openingErrorMutation = useOpeningErrorMutation();
 
   function SearchQuery() {
@@ -47,7 +52,10 @@ function App() {
           <ul>
             {data?.map((game) => {
               const color = game.players[0].id === PLAYER ? "white" : "black";
-              const style = color === "white" ? "text-black bg-white" : "text-white bg-black";
+              const style =
+                color === "white"
+                  ? "text-black bg-white"
+                  : "text-white bg-black";
               return (
                 <div key={game.id}>
                   <li>

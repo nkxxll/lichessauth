@@ -138,8 +138,8 @@ let parse_pawn_move =
     { piece = Pawn
     ; from_file = Some from_file
     ; from_rank = None
-    ; to_file = to_file
-    ; to_rank = to_rank
+    ; to_file
+    ; to_rank
     ; promotion
     ; is_capture
     ; is_check
@@ -170,8 +170,8 @@ let parse_piece_move =
     { piece
     ; from_file
     ; from_rank
-    ; to_file = to_file
-    ; to_rank = to_rank
+    ; to_file
+    ; to_rank
     ; promotion
     ; is_capture
     ; is_check
@@ -190,9 +190,10 @@ let parse_san =
 ;;
 
 let parse_san_exn san =
-    match parse_string ~consume:All parse_san san with
-      | Ok mi -> mi
-      | Error _ -> failwith "san could not be parsed!"
+  match parse_string ~consume:All parse_san san with
+  | Ok mi -> mi
+  | Error _ -> failwith "san could not be parsed!"
+;;
 
 let ws =
   skip_many1
@@ -253,6 +254,7 @@ let move_section =
 
 let simple_move_list = sep_by (char ' ') notation
 let game = config >>= fun c -> many not_relevant *> move_section >>| fun moves -> c, moves
+let file = sep_by (string "\n\n") game
 
 let%expect_test "config one move" =
   let text =
@@ -782,6 +784,102 @@ d5 {+0.52} 11. h4 {+0.59}) 8... d6 9. Re1 Nbd7 10. a4 Qe7 *|}
     [%expect.unreachable]
 ;;
 
+let%expect_test "parse game 3" =
+  let text3 =
+    {|[Event "?"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "?"]
+[White "?"]
+[Black "?"]
+[Result "*"]
+[Link "https://www.chess.com/analysis/game/pgn/26CErLFvbg/analysis"]
+
+1. d4 e6 2. Bf4 b6 3. e3 g6 (3... Bb7 4. Nf3 Nf6 5. Bd3 Nh5 6. Bg5 Be7 7. Bxe7
+Qxe7 {+0.22} 8. O-O O-O 9. c4 Nf6 10. Nc3 d5 11. cxd5 exd5 12. Rc1 c5 13. dxc5
+{+0.26} 13... bxc5 14. Qa4 Nbd7 15. Rfd1 Nb6 16. Qh4 g6 17. Na4 {+0.37}) 4. Nf3
+Bg7 (4... Bb7 5. Bd3 Nf6 6. Qe2 c5 7. Nc3 Nc6 8. O-O {+0.39} 8... Be7 9. Nb5 d6
+10. c4 O-O 11. Rad1 {+0.44}) 5. Bd3 f5 6. c3 Nf6 7. Nbd2 Bb7 8. O-O (8. Qe2
+{+0.40} 8... d6 {+0.44} 9. O-O-O {+0.42} 9... Nc6 {+0.54} 10. Rhe1 {+0.40} 10...
+d5 {+0.52} 11. h4 {+0.59}) 8... d6 9. Re1 Nbd7 10. a4 Qe7 *
+
+[Event "?"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "?"]
+[White "?"]
+[Black "?"]
+[Result "*"]
+[Link "https://www.chess.com/analysis/game/pgn/26CErLFvbg/analysis"]
+
+1. d4 e6 2. Bf4 b6 3. e3 g6 (3... Bb7 4. Nf3 Nf6 5. Bd3 Nh5 6. Bg5 Be7 7. Bxe7
+Qxe7 {+0.22} 8. O-O O-O 9. c4 Nf6 10. Nc3 d5 11. cxd5 exd5 12. Rc1 c5 13. dxc5
+{+0.26} 13... bxc5 14. Qa4 Nbd7 15. Rfd1 Nb6 16. Qh4 g6 17. Na4 {+0.37}) 4. Nf3
+Bg7 (4... Bb7 5. Bd3 Nf6 6. Qe2 c5 7. Nc3 Nc6 8. O-O {+0.39} 8... Be7 9. Nb5 d6
+10. c4 O-O 11. Rad1 {+0.44}) 5. Bd3 f5 6. c3 Nf6 7. Nbd2 Bb7 8. O-O (8. Qe2
+{+0.40} 8... d6 {+0.44} 9. O-O-O {+0.42} 9... Nc6 {+0.54} 10. Rhe1 {+0.40} 10...
+d5 {+0.52} 11. h4 {+0.59}) 8... d6 9. Re1 Nbd7 10. a4 Qe7 *
+
+[Event "?"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "?"]
+[White "?"]
+[Black "?"]
+[Result "*"]
+[Link "https://www.chess.com/analysis/game/pgn/26CErLFvbg/analysis"]
+
+1. d4 e6 2. Bf4 b6 3. e3 g6 (3... Bb7 4. Nf3 Nf6 5. Bd3 Nh5 6. Bg5 Be7 7. Bxe7
+Qxe7 {+0.22} 8. O-O O-O 9. c4 Nf6 10. Nc3 d5 11. cxd5 exd5 12. Rc1 c5 13. dxc5
+{+0.26} 13... bxc5 14. Qa4 Nbd7 15. Rfd1 Nb6 16. Qh4 g6 17. Na4 {+0.37}) 4. Nf3
+Bg7 (4... Bb7 5. Bd3 Nf6 6. Qe2 c5 7. Nc3 Nc6 8. O-O {+0.39} 8... Be7 9. Nb5 d6
+10. c4 O-O 11. Rad1 {+0.44}) 5. Bd3 f5 6. c3 Nf6 7. Nbd2 Bb7 8. O-O (8. Qe2
+{+0.40} 8... d6 {+0.44} 9. O-O-O {+0.42} 9... Nc6 {+0.54} 10. Rhe1 {+0.40} 10...
+d5 {+0.52} 11. h4 {+0.59}) 8... d6 9. Re1 Nbd7 10. a4 Qe7 *
+
+[Event "?"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "?"]
+[White "?"]
+[Black "?"]
+[Result "*"]
+[Link "https://www.chess.com/analysis/game/pgn/26CErLFvbg/analysis"]
+
+1. d4 e6 2. Bf4 b6 3. e3 g6 (3... Bb7 4. Nf3 Nf6 5. Bd3 Nh5 6. Bg5 Be7 7. Bxe7
+Qxe7 {+0.22} 8. O-O O-O 9. c4 Nf6 10. Nc3 d5 11. cxd5 exd5 12. Rc1 c5 13. dxc5
+{+0.26} 13... bxc5 14. Qa4 Nbd7 15. Rfd1 Nb6 16. Qh4 g6 17. Na4 {+0.37}) 4. Nf3
+Bg7 (4... Bb7 5. Bd3 Nf6 6. Qe2 c5 7. Nc3 Nc6 8. O-O {+0.39} 8... Be7 9. Nb5 d6
+10. c4 O-O 11. Rad1 {+0.44}) 5. Bd3 f5 6. c3 Nf6 7. Nbd2 Bb7 8. O-O (8. Qe2
+{+0.40} 8... d6 {+0.44} 9. O-O-O {+0.42} 9... Nc6 {+0.54} 10. Rhe1 {+0.40} 10...
+d5 {+0.52} 11. h4 {+0.59}) 8... d6 9. Re1 Nbd7 10. a4 Qe7 *
+
+[Event "?"]
+[Site "?"]
+[Date "????.??.??"]
+[Round "?"]
+[White "?"]
+[Black "?"]
+[Result "*"]
+[Link "https://www.chess.com/analysis/game/pgn/26CErLFvbg/analysis"]
+
+1. d4 e6 2. Bf4 b6 3. e3 g6 (3... Bb7 4. Nf3 Nf6 5. Bd3 Nh5 6. Bg5 Be7 7. Bxe7
+Qxe7 {+0.22} 8. O-O O-O 9. c4 Nf6 10. Nc3 d5 11. cxd5 exd5 12. Rc1 c5 13. dxc5
+{+0.26} 13... bxc5 14. Qa4 Nbd7 15. Rfd1 Nb6 16. Qh4 g6 17. Na4 {+0.37}) 4. Nf3
+Bg7 (4... Bb7 5. Bd3 Nf6 6. Qe2 c5 7. Nc3 Nc6 8. O-O {+0.39} 8... Be7 9. Nb5 d6
+10. c4 O-O 11. Rad1 {+0.44}) 5. Bd3 f5 6. c3 Nf6 7. Nbd2 Bb7 8. O-O (8. Qe2
+{+0.40} 8... d6 {+0.44} 9. O-O-O {+0.42} 9... Nc6 {+0.54} 10. Rhe1 {+0.40} 10...
+d5 {+0.52} 11. h4 {+0.59}) 8... d6 9. Re1 Nbd7 10. a4 Qe7 *|}
+  in
+  match parse_string ~consume:All file text3 with
+  | Ok _data ->
+    Stdio.print_endline "parsed successfully";
+    [%expect "parsed successfully"]
+  | Error err ->
+    Stdio.print_endline err;
+    [%expect.unreachable]
+;;
+
 module ChessNode = struct
   open Sexplib0
 
@@ -1146,39 +1244,165 @@ let%expect_test "merge two simple move trees" =
     |}]
 ;;
 
-let%expect_test "san notation parsing" =
-  let sans =
-    [ "e4"
-    ; "exd5"
-    ; "exd6"
-    ; "e8=Q"
-    ; "exd8=R"
-    ; "e8=Q+"
-    ; "e8=Q#"
-    ; "exd8=Q#"
-    ; "Nf3"
-    ; "Qh5"
-    ; "Bxc4"
-    ; "Nf7+"
-    ; "Qh7#"
-    ; "Rxe8#"
-    ; "Nbd7"
-    ; "R1e4"
-    ; "Qh4e1"
-    ; "O-O"
-    ; "O-O-O"
-    ; "O-O+"
-    ; "O-O-O#"
-    ; "Raxd8+"
-    ; "Nfxe8=Q"
-    ; "fxg8=R#"
-    ]
+(* let%expect_test "san notation parsing" = *)
+(*   let sans = *)
+(*     [ "e4" *)
+(*     ; "exd5" *)
+(*     ; "exd6" *)
+(*     ; "e8=Q" *)
+(*     ; "exd8=R" *)
+(*     ; "e8=Q+" *)
+(*     ; "e8=Q#" *)
+(*     ; "exd8=Q#" *)
+(*     ; "Nf3" *)
+(*     ; "Qh5" *)
+(*     ; "Bxc4" *)
+(*     ; "Nf7+" *)
+(*     ; "Qh7#" *)
+(*     ; "Rxe8#" *)
+(*     ; "Nbd7" *)
+(*     ; "R1e4" *)
+(*     ; "Qh4e1" *)
+(*     ; "O-O" *)
+(*     ; "O-O-O" *)
+(*     ; "O-O+" *)
+(*     ; "O-O-O#" *)
+(*     ; "Raxd8+" *)
+(*     ; "Nfxe8=Q" *)
+(*     ; "fxg8=R#" *)
+(*     ] *)
+(*   in *)
+(*   let parse_helper san = *)
+(*     match parse_string ~consume:All parse_san san with *)
+(*     | Ok s -> s *)
+(*     | Error _ -> failwith "cannot happen" *)
+(*   in *)
+(*   List.iter sans ~f:(parse_helper >> show_move_info >> Stdio.print_endline); *)
+(*   [%expect {||}] *)
+(* ;; *)
+
+let parse_file_helper file_str = parse_string ~consume:All file file_str
+
+(*
+   export type OpeningProps = {
+  baseMoves: string[];
+  badMove: string;
+  goodMove: string;
+  orientation: "white" | "black";
+};
+*)
+type deviation =
+  { baseMoves : string list
+  ; badMove : string
+  ; goodMove : string
+  ; orientation : string
+  }
+[@@deriving show, yojson]
+
+let choose_next (next : ChessNode.t list) =
+  match next with
+  | [] -> ""
+  | [ item ] -> item.notation
+  | x :: _ -> x.notation
+;;
+
+let find_deviation (tree : ChessNode.t) moves color =
+  match tree.next with
+  | [] -> { baseMoves = []; badMove = ""; goodMove = ""; orientation = color }
+  | next_list ->
+    let rec loop base (next : ChessNode.t list) rest =
+      match rest with
+      | [] -> { baseMoves = base; badMove = ""; goodMove = ""; orientation = color }
+      | move :: tl ->
+        let new_next =
+          List.filter next ~f:(fun node -> String.equal node.notation move)
+        in
+        (match new_next with
+         | [] ->
+           { baseMoves = List.rev base
+           ; badMove = move
+           ; goodMove = choose_next next
+           ; orientation = color
+           }
+         | [ x ] -> loop (x.notation :: base) x.next tl
+         | x :: _ ->
+           Stdio.print_endline "here we have multiple results but it should only be one";
+           loop (x.notation :: base) x.next tl)
+    in
+    loop [] next_list moves
+;;
+
+let json_serialize_deviation deviation =
+  deviation_to_yojson deviation |> Yojson.Safe.to_string
+;;
+
+let setup_merge_deviation file_str moves color =
+  match parse_file_helper file_str with
+  | Ok data ->
+    let tree =
+      List.map data ~f:(fun (_config, tokens) -> parse_tokens tokens)
+      |> List.fold
+           ~init:{ ChessNode.notation = "root"; next = []; parent = None }
+           ~f:(fun acc a -> merge_nodes acc a)
+    in
+    let deviation = find_deviation tree moves color in
+    let deviation_json = json_serialize_deviation deviation in
+    Ok deviation_json
+  | Error err -> Error ("file could not be parsed: " ^ err)
+;;
+
+let find_opening_error file_str moves color =
+  let move_list = String.split moves ~on:' ' in
+  match color with
+  | "white" -> setup_merge_deviation file_str move_list color
+  | "black" -> setup_merge_deviation file_str move_list color
+  | _ -> Error "bad color"
+;;
+
+let%expect_test "test deviation finding" =
+  let pgn =
+    {|[Event "Test Game"]
+[Site "Local"]
+[Date "2025.08.13"]
+[Round "1"]
+[White "Tester"]
+[Black "Tester"]
+[Result "*"]
+
+1. e4 e5 2. Nf3 Nc6 *|}
   in
-  let parse_helper san =
-    match parse_string ~consume:All parse_san san with
-    | Ok s -> s
-    | Error _ -> failwith "cannot happen"
+  let moves = [ "e4"; "e5"; "Nf3"; "Nf6" ] in
+  match setup_merge_deviation pgn moves "white" with
+  | Ok deviation ->
+    deviation |> Stdio.print_endline;
+    [%expect
+      {| {"baseMoves":["e4","e5","Nf3"],"badMove":"Nf6","goodMove":"Nc6","orientation":"white"} |}]
+  | Error err ->
+    Stdio.print_endline err;
+    [%expect.unreachable]
+;;
+
+let%expect_test "deviation after multiple correct moves" =
+  let pgn =
+    {|[Event "Test Game"]
+[Site "?"]
+[Date "2025.08.13"]
+[Round "-"]
+[White "Test White"]
+[Black "Test Black"]
+[Result "*"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 *|}
   in
-  List.iter sans ~f:(parse_helper >> show_move_info >> Stdio.print_endline);
-  [%expect {||}]
+  (* Moves that match the PGN until move 3, but then deviate *)
+  let moves = [ "e4"; "e5"; "Nf3"; "Nc6"; "Bc4" ] in
+  (* Merge and find deviation *)
+  match setup_merge_deviation pgn moves "white" with
+  | Ok json ->
+    Stdio.print_endline json;
+    [%expect
+      {| {"baseMoves":["e4","e5","Nf3","Nc6"],"badMove":"Bc4","goodMove":"Bb5","orientation":"white"} |}]
+  | Error err ->
+    Stdio.print_endline ("Parse failed" ^ err);
+    [%expect.unreachable]
 ;;

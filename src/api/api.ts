@@ -1,7 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import type { OpeningProps } from "../components/Opening";
-import type { Game, OcamlChessboardOptions } from "../interfaces/chess";
-import { OChessBoradOptionToChessBoardOptions } from "../utils/utils";
+import type { Game } from "../interfaces/chess";
 
 export async function fetchGameList(): Promise<Game[]> {
   const res = await fetch("/api/gamelist");
@@ -33,9 +32,9 @@ export async function fetchOpeningError(
     );
   }
 
-  const data: OcamlChessboardOptions = await res.json();
+  const data: OpeningProps = await res.json();
 
-  return OChessBoradOptionToChessBoardOptions(data);
+  return data;
 }
 
 export function useOpeningErrorMutation() {

@@ -1,6 +1,8 @@
 open Lwt.Infix
 open Base
 
+let (>>) f g x = g (f x)
+
 type tokenResponse =
   { token_type : string
   ; access_token : string
@@ -169,6 +171,9 @@ let random_string ~len =
   encoded
 ;;
 
+let e4nystyle = Stdio.In_channel.read_all ("../pgn/e4NYStyle.pgn")
+let e6b6nystyle = Stdio.In_channel.read_all ("../pgn/e6b6NYStyle.pgn")
+
 let () =
   Dream.run ~port:8080
   @@ Dream.logger
@@ -284,18 +289,7 @@ let () =
            Dream.html (List.map ~f:show_game games |> String.concat ~sep:"\n"))
        ; Dream.get "/opening" (fun req ->
            match Dream.query req "color", Dream.query req "moves" with
-           | Some _color, Some _moves ->
-             let example_chessboard : chessboard_options =
-               { fen = "r1bqkbnr/pppppppp/n7/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-               ; bad_move = { start_square = "e2"; end_square = "e4"; color = Red }
-               ; good_move = { start_square = "d2"; end_square = "d4"; color = Green }
-               ; orientation = White
-               }
-             in
-             let json =
-               example_chessboard |> chessboard_options_to_yojson |> Yojson.Safe.to_string
-             in
-             Dream.json json
+           | Some color, Some moves -> Lichessserver.find_opening_error e4nystyle moves color >> Dream.json
            | _ -> Dream.empty `Bad_Request)
        ]
 ;;
