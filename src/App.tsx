@@ -1,11 +1,12 @@
 import toast, { Toaster } from "react-hot-toast";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { fetchGameList, useOpeningErrorMutation } from "./api/api";
 import { Opening, type OpeningProps } from "./components/Opening";
 import { useEffect, useState } from "react";
 import ErrorLogin from "./components/ErrorLogin";
 import GameSelectionMessage from "./components/GameSelectionMessage";
 import type { Game } from "./interfaces/chess";
+import Loading from "./components/LoadingScreen";
 
 const PLAYER = "brandtheon";
 
@@ -27,8 +28,7 @@ function App() {
 
   const [config, setConfig] = useState<OpeningProps | null>(null);
 
-  const queryClient = useQueryClient();
-
+  // NOTE: dont know whether I used suspense right here but I tried
   const { data, isLoading, error } = useQuery({
     queryKey: ["gameList"],
     queryFn: () => fetchGameList(100),
@@ -46,12 +46,7 @@ function App() {
     setFilteredGames(filtered);
   }, [filterText, data]);
 
-  function refreshGameList() {
-    queryClient.invalidateQueries({ queryKey: ["gameList"] });
-    toast("Refreshed...");
-  }
-
-  if (isLoading) return <p>Loading games...</p>;
+  if (isLoading) return <Loading />;
   if (error instanceof Error)
     return (
       <div className="flex items-center justify-center p-2 h-full bg-slate-950 text-slate-200 min-h-screen dark:bg-slate-900 dark:text-slate-200 dark:from-blue-950 dark:to-blue-900 dark:bg-gradient-to-r">
@@ -89,7 +84,8 @@ function App() {
                   >
                     <div>
                       <p className="text-lg font-semibold">
-                        {game.id} ({game.moves.length} moves)
+                        {game.id} ({game.moves.length} moves){" "}
+                        {new Date(game.created_at).toLocaleString()}
                       </p>
                       <div className="flex items-center gap-2 mt-1">
                         <span

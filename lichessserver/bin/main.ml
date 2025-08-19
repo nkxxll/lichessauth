@@ -58,7 +58,8 @@ type game =
   ; moves : string
   ; opening : opening (* white * black *)
   ; players : player * player
-  ; winner : side
+  ; winner : side option
+  ; created_at : int
   }
 [@@deriving show, yojson]
 
@@ -123,13 +124,18 @@ let parse_game (json : Yojson.Basic.t) : game =
     player1, player2
   in
   let winner =
-    let win_str = json |> member "winner" |> to_string in
-    match win_str with
-    | "black" -> Black
-    | "white" -> White
-    | _ -> failwith "winner is neither blach nor white"
+    let win_str_opt = json |> member "winner" in
+    match win_str_opt with
+    | `Null -> None
+    | value ->
+      let win_str = value |> to_string in
+      (match win_str with
+       | "white" -> Some White
+       | "black" -> Some Black
+       | _ -> None)
   in
-  { id; moves; opening; players = player1, player2; winner }
+  let created_at = json |> member "createdAt" |> to_int in
+  { id; moves; opening; players = player1, player2; winner; created_at }
 ;;
 
 let parse_game_list json_str =
@@ -242,7 +248,7 @@ let () =
                  let newUser = parse_user (Yojson.Basic.from_string body_str) in
                  thisUser := newUser;
                  Dream.log "This User:\n%s" (show_user !thisUser);
-                 Dream.redirect req "http://localhost:5173/")
+                 Dream.redirect req "http://localhost:5173/app")
              else Dream.empty `Bad_Request)
        ; Dream.get "/email" (fun _req ->
            make_basic_get !auth (Uri.of_string email_url)

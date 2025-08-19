@@ -8,6 +8,7 @@ export interface Game {
   moves: string;
   opening: Opening;
   players: Array<{ user: string; id: string }>;
+  created_at: number;
 }
 
 export type OcamlArrowColor = "Red" | "Green";
