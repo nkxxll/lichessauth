@@ -7,20 +7,29 @@
 (source
  (github username/reponame))
 
-(authors "Author Name <author@example.com>")
+(authors "Niklas Kirschall <niki.nice1203@gmail.com>")
 
-(maintainers "Maintainer Name <maintainer@example.com>")
+(maintainers "Niklas Kirschall <niki.nice1203@gmail.com>")
 
 (license LICENSE)
 
-(documentation https://url/to/documentation)
+(documentation https://github.com/nkxxll/lichessauth.git)
 
 (package
  (name lichessserver)
- (synopsis "A short synopsis")
- (description "A longer description")
- (depends ocaml)
+ (synopsis "Lichess OAuth2.0 study")
+ (description
+  "A lichess application that shows you where you went wrong in your opening from one or more course pgn files.")
+ (depends
+  ocaml
+  cohttp
+  cohttp-lwt-unix
+  dream
+  ocaml-base-compiler
+  ppx_deriving
+  ppx_deriving_yojson
+  ppx_expect)
  (tags
-  ("add topics" "to describe" your project)))
+  ("chess" "oauth" "expect test" "dream" "lwt")))
 
 ; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html
